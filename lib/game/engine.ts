@@ -6,7 +6,7 @@ import {
   type Difficulty,
 } from "@/lib/sudoku/puzzle";
 
-export const MAX_ENERGY = 3;
+export const MAX_ENERGY = 7;
 
 export type Phase = "start" | "loading" | "playing" | "escaped" | "dead";
 
