@@ -6,6 +6,7 @@ import { DungeonView } from "@/components/dungeon/dungeon-view";
 import { NumberPad } from "@/components/sudoku/number-pad";
 import { SudokuBoard } from "@/components/sudoku/board";
 import { MAX_ENERGY, type GameState } from "@/lib/game/engine";
+import { cn } from "@/lib/utils";
 
 interface GameScreenProps {
   state: GameState;
@@ -29,7 +30,12 @@ export function GameScreen({
   }, [state.selectedCell, onSubmitValue]);
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-8 px-6 py-8 lg:flex-row lg:items-stretch lg:justify-center">
+    <div
+      className={cn(
+        "flex flex-1 flex-col items-center gap-8 px-6 py-8 lg:flex-row lg:items-center lg:justify-center",
+        state.attacking && "animate-[shake_0.35s_ease-in-out]"
+      )}
+    >
       <div className="flex w-full flex-col items-center gap-4 lg:max-w-md">
         <SudokuBoard
           board={state.board}
@@ -39,7 +45,7 @@ export function GameScreen({
         />
         <NumberPad disabled={!state.selectedCell} onSubmit={onSubmitValue} />
       </div>
-      <div className="flex w-full items-center lg:max-w-md">
+      <div className="flex w-full items-center justify-center lg:max-w-2xl">
         <DungeonView
           path={state.path}
           stepIndex={state.stepIndex}

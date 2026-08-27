@@ -349,19 +349,6 @@ function drawEnergy(ctx: CanvasRenderingContext2D, energy: number, max: number) 
   }
 }
 
-function drawTurnHint(ctx: CanvasRenderingContext2D) {
-  // 하단은 에너지 칸 수가 늘어나면 겹칠 수 있어(칸이 늘수록 표시줄이 넓어짐),
-  // 아무것도 없는 좌상단에 반투명 배경과 함께 그린다.
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = "#0a0a0c";
-  ctx.fillRect(2, 2, 62, 12);
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "#e8e2d8";
-  ctx.font = "10px monospace";
-  ctx.textAlign = "left";
-  ctx.fillText("↷ 방향 전환", 5, 11);
-}
-
 const STEP_ANIMATION_MS = 380;
 
 export function DungeonView({
@@ -415,9 +402,6 @@ export function DungeonView({
       drawMonster(ctx, prevEnemyImg, nextEnemyImg, swapT, attacking);
       drawEnergy(ctx, energy, maxEnergy);
 
-      const upcoming = path[stepIndex];
-      if (upcoming?.turn) drawTurnHint(ctx);
-
       if (attacking) {
         ctx.fillStyle = "rgba(180, 30, 20, 0.35)";
         ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
@@ -465,7 +449,6 @@ export function DungeonView({
       height={CANVAS_H}
       className={cn(
         "aspect-[4/3] w-full rounded-2xl border border-border [image-rendering:pixelated]",
-        attacking && "animate-[shake_0.35s_ease-in-out]",
         className
       )}
     />
