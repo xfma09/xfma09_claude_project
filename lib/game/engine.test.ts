@@ -141,7 +141,7 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
     expect(state.endedAt).toBe(2000 + MAX_ENERGY - 1);
   });
 
-  test("마지막 빈칸을 맞히면 탈출 상태가 된다", () => {
+  test("빈칸이 하나 남으면 자동으로 채워지며 탈출 상태가 된다", () => {
     const blankCells: Array<{ row: number; col: number }> = [];
     for (let row = 0; row < 9; row++) {
       for (let col = 0; col < 9; col++) {
@@ -149,8 +149,11 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
       }
     }
 
+    // 마지막 한 칸의 값은 나머지가 다 정해지면 스도쿠 규칙상 하나로 결정되므로,
+    // 입력 없이 자동으로 채워진다. 그래서 그 앞까지만 직접 입력한다.
+    const toFillManually = blankCells.slice(0, -1);
     let state = loaded();
-    blankCells.forEach(({ row, col }, i) => {
+    toFillManually.forEach(({ row, col }, i) => {
       state = gameReducer(state, { type: "SELECT_CELL", row, col });
       const value = Number(SOLUTION[row * 9 + col]);
       state = gameReducer(state, {
@@ -160,9 +163,13 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
       });
     });
 
+    const lastCell = blankCells[blankCells.length - 1];
+    expect(state.board[lastCell.row][lastCell.col]).toBe(
+      Number(SOLUTION[lastCell.row * 9 + lastCell.col])
+    );
     expect(state.phase).toBe("escaped");
     expect(state.stepIndex).toBe(blankCells.length);
-    expect(state.endedAt).toBe(3000 + blankCells.length - 1);
+    expect(state.endedAt).toBe(3000 + toFillManually.length - 1);
   });
 });
 

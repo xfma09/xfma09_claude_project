@@ -29,7 +29,7 @@ export function GameScreen({
   }, [state.selectedCell, onSubmitValue]);
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-8 px-6 py-8 lg:flex-row lg:items-start lg:justify-center">
+    <div className="flex flex-1 flex-col items-center gap-8 px-6 py-8 lg:flex-row lg:items-stretch lg:justify-center">
       <div className="flex w-full flex-col items-center gap-4 lg:max-w-md">
         <SudokuBoard
           board={state.board}
@@ -39,13 +39,14 @@ export function GameScreen({
         />
         <NumberPad disabled={!state.selectedCell} onSubmit={onSubmitValue} />
       </div>
-      <div className="w-full lg:max-w-md">
+      <div className="flex w-full items-center lg:max-w-md">
         <DungeonView
           path={state.path}
           stepIndex={state.stepIndex}
           energy={state.energy}
           maxEnergy={MAX_ENERGY}
           attacking={state.attacking}
+          className="w-full"
         />
       </div>
     </div>

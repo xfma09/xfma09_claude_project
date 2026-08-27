@@ -115,7 +115,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (correct) {
         const board = state.board.map((r) => [...r]);
         board[row][col] = action.value;
-        const stepIndex = state.stepIndex + 1;
+        let stepIndex = state.stepIndex + 1;
+
+        // 빈칸이 정확히 하나 남으면 그 값은 스도쿠 규칙상 이미 하나로
+        // 결정돼 있으므로, 입력을 더 받지 않고 자동으로 채워 마무리한다.
+        if (stepIndex === state.path.length - 1) {
+          for (let r = 0; r < board.length; r++) {
+            for (let c = 0; c < board[r].length; c++) {
+              if (board[r][c] === null) {
+                board[r][c] = state.solution[r][c];
+              }
+            }
+          }
+          stepIndex += 1;
+        }
+
         const escaped = stepIndex >= state.path.length;
         return {
           ...state,
