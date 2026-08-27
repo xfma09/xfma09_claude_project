@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { DungeonView } from "@/components/dungeon/dungeon-view";
 import { NumberPad } from "@/components/sudoku/number-pad";
 import { SudokuBoard } from "@/components/sudoku/board";
-import { MAX_ENERGY, type GameState } from "@/lib/game/engine";
+import { MAX_ENERGY, TURN_DURATION_MS, type GameState } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
 
 interface GameScreenProps {
@@ -53,6 +53,10 @@ export function GameScreen({
           energy={state.energy}
           maxEnergy={MAX_ENERGY}
           attacking={state.attacking}
+          turnDeadline={state.turnDeadline}
+          turnDurationMs={
+            state.difficulty ? TURN_DURATION_MS[state.difficulty] : 0
+          }
           className="w-full"
         />
       </div>

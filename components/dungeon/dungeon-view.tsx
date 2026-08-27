@@ -11,6 +11,9 @@ interface DungeonViewProps {
   energy: number;
   maxEnergy: number;
   attacking: boolean;
+  // 현재 턴의 제한시간이 끝나는 시각(ms epoch). 흐르지 않는 상태면 null.
+  turnDeadline: number | null;
+  turnDurationMs: number;
   className?: string;
 }
 
@@ -376,6 +379,8 @@ export function DungeonView({
   energy,
   maxEnergy,
   attacking,
+  turnDeadline,
+  turnDurationMs,
   className,
 }: DungeonViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -476,19 +481,31 @@ export function DungeonView({
   }, [path, stepIndex, energy, maxEnergy, attacking, enemyLoadTick, enemySequence]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      role="img"
-      aria-label={`던전 뷰. ${stepIndex}번째 걸음, 남은 걸음 ${Math.max(
-        path.length - stepIndex,
-        0
-      )}, 에너지 ${energy}/${maxEnergy}`}
-      width={CANVAS_W}
-      height={CANVAS_H}
-      className={cn(
-        "aspect-[4/3] w-full rounded-2xl border border-border [image-rendering:pixelated]",
-        className
+    <div className={cn("relative aspect-[4/3] w-full", className)}>
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label={`던전 뷰. ${stepIndex}번째 걸음, 남은 걸음 ${Math.max(
+          path.length - stepIndex,
+          0
+        )}, 에너지 ${energy}/${maxEnergy}`}
+        width={CANVAS_W}
+        height={CANVAS_H}
+        className="h-full w-full rounded-2xl border border-border [image-rendering:pixelated]"
+      />
+      {turnDeadline !== null && (
+        // key로 turnDeadline을 주면 새 턴이 시작될 때마다(정답·시간초과 처리
+        // 직후) 이 엘리먼트가 다시 마운트되어 CSS 애니메이션이 처음부터 재생된다.
+        <div
+          key={turnDeadline}
+          className="absolute right-[1.875%] top-[12.5%] h-[5%] w-[38.75%] overflow-hidden rounded-sm bg-black/40"
+        >
+          <div
+            className="h-full [animation-fill-mode:forwards] [animation-timing-function:linear] [animation-name:turn-timer-drain]"
+            style={{ animationDuration: `${turnDurationMs}ms` }}
+          />
+        </div>
       )}
-    />
+    </div>
   );
 }

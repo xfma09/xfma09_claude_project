@@ -143,3 +143,11 @@
   60% { opacity: 1; transform: scale(1.25); }
   100% { opacity: 1; transform: scale(1); }
 }
+
+/* 턴 제한시간이 가득 찬 채로 시작해 0까지 줄어든다. 남은 시간이 얼마 없으면
+   색이 점점 붉어져 위험을 알린다. */
+@keyframes turn-timer-drain {
+  from { width: 100%; background-color: #c9a227; }
+  60% { background-color: #c9a227; }
+  to { width: 0%; background-color: #c0392b; }
+}

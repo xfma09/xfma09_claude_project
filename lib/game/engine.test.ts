@@ -4,6 +4,7 @@ import {
   createInitialState,
   gameReducer,
   MAX_ENERGY,
+  TURN_DURATION_MS,
 } from "@/lib/game/engine";
 
 // 3x3만 채워진 아주 작은 퍼즐: 나머지 78칸은 빈칸이다.
@@ -57,6 +58,11 @@ describe("PUZZLE_LOADED", () => {
     const blanks = PUZZLE.split("").filter((ch) => ch === "0").length;
     expect(state.path).toHaveLength(blanks);
   });
+
+  test("난이도에 맞는 제한시간으로 첫 턴이 시작된다", () => {
+    const state = loaded();
+    expect(state.turnDeadline).toBe(1000 + TURN_DURATION_MS.easy);
+  });
 });
 
 describe("PUZZLE_FAILED", () => {
@@ -90,6 +96,7 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
     expect(state.energy).toBe(MAX_ENERGY);
     expect(state.attacking).toBe(false);
     expect(state.phase).toBe("playing");
+    expect(state.turnDeadline).toBe(1500 + TURN_DURATION_MS.easy);
   });
 
   test("이미 정답을 맞힌 칸은 다시 선택할 수 없다", () => {
@@ -118,6 +125,7 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
     expect(state.energy).toBe(MAX_ENERGY - 1);
     expect(state.attacking).toBe(true);
     expect(state.phase).toBe("playing");
+    expect(state.turnDeadline).toBe(1500 + TURN_DURATION_MS.easy);
   });
 
   test("주어진 칸(원래 숫자가 있던 칸)은 선택할 수 없다", () => {
@@ -139,6 +147,7 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
     expect(state.energy).toBe(0);
     expect(state.phase).toBe("dead");
     expect(state.endedAt).toBe(2000 + MAX_ENERGY - 1);
+    expect(state.turnDeadline).toBeNull();
   });
 
   test("빈칸이 하나 남으면 자동으로 채워지며 탈출 상태가 된다", () => {
@@ -173,9 +182,47 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
     expect(state.stepIndex).toBe(blankCells.length);
     expect(state.endedAt).toBe(3000 + toFillManually.length - 1);
     expect(state.autoFilledCells).toEqual([lastCell]);
+    expect(state.turnDeadline).toBeNull();
 
     state = gameReducer(state, { type: "FINISH_ESCAPE" });
     expect(state.phase).toBe("escaped");
+  });
+});
+
+describe("TIMEOUT", () => {
+  test("제한시간이 다 되면 오답과 똑같이 에너지가 줄고 피격 상태가 된다", () => {
+    let state = loaded();
+    state = gameReducer(state, { type: "SELECT_CELL", row: 0, col: 3 });
+    state = gameReducer(state, { type: "TIMEOUT", now: 61000 });
+
+    expect(state.board[0][3]).toBeNull();
+    expect(state.stepIndex).toBe(0);
+    expect(state.energy).toBe(MAX_ENERGY - 1);
+    expect(state.attacking).toBe(true);
+    expect(state.phase).toBe("playing");
+    expect(state.turnDeadline).toBe(61000 + TURN_DURATION_MS.easy);
+  });
+
+  test("어떤 빈칸도 선택하지 않은 채로도 시간초과가 일어난다", () => {
+    const state = gameReducer(loaded(), { type: "TIMEOUT", now: 61000 });
+    expect(state.energy).toBe(MAX_ENERGY - 1);
+    expect(state.attacking).toBe(true);
+  });
+
+  test("반복된 시간초과로 에너지가 0이 되면 사망 상태가 된다", () => {
+    let state = loaded();
+    for (let i = 0; i < MAX_ENERGY; i++) {
+      state = gameReducer(state, { type: "TIMEOUT", now: 61000 + i });
+    }
+    expect(state.energy).toBe(0);
+    expect(state.phase).toBe("dead");
+    expect(state.turnDeadline).toBeNull();
+  });
+
+  test("playing 상태가 아니면 아무 효과가 없다", () => {
+    const state = createInitialState();
+    const next = gameReducer(state, { type: "TIMEOUT", now: 1000 });
+    expect(next).toBe(state);
   });
 });
 

@@ -75,6 +75,19 @@ export function GameApp({ initialState, banner }: GameAppProps) {
     return () => clearTimeout(timer);
   }, [state.phase]);
 
+  // 턴 제한시간이 끝나는 정확한 시각에 시간초과를 알린다. 정답이든
+  // 시간초과든 새 턴이 시작될 때마다 turnDeadline이 갱신되므로, 그때마다
+  // 이 타이머도 다시 걸린다.
+  useEffect(() => {
+    if (state.phase !== "playing" || state.turnDeadline === null) return;
+    const remaining = state.turnDeadline - Date.now();
+    const timer = setTimeout(
+      () => dispatch({ type: "TIMEOUT", now: Date.now() }),
+      Math.max(0, remaining)
+    );
+    return () => clearTimeout(timer);
+  }, [state.phase, state.turnDeadline]);
+
   const screen = (() => {
     if (state.phase === "start" || state.phase === "loading") {
       return (
