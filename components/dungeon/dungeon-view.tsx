@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { PathStep } from "@/lib/escape/path";
 import { cn } from "@/lib/utils";
@@ -24,12 +24,17 @@ const FLOOR = ["#6b5a44", "#54452f", "#3f3324", "#2c231a", "#1d1712"];
 const FLOOR_ALT = ["#5a4a37", "#453827", "#33291d", "#231b14", "#17120e"];
 const CEIL = ["#2a2320", "#1f1a18", "#171311", "#100d0c", "#0a0808"];
 
-function drawCorridor(ctx: CanvasRenderingContext2D, tintOffset: number) {
+function drawCorridor(
+  ctx: CanvasRenderingContext2D,
+  tintOffset: number,
+  depthT: number = 0
+) {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   const cx = 80;
   const cy = 56;
-  const scale = (i: number) => 1 / (1 + 0.85 * i);
+  // depthT(0→1)만큼 모든 깊이 구간을 카메라 쪽으로 당겨, 한 칸 전진하는 돌리줌을 만든다.
+  const scale = (i: number) => 1 / (1 + 0.85 * (i - depthT));
   const extent = (i: number) => ({ hw: 82 * scale(i), hh: 62 * scale(i) });
 
   for (let i = 4; i >= 0; i--) {
@@ -107,6 +112,39 @@ function drawCorridor(ctx: CanvasRenderingContext2D, tintOffset: number) {
   ctx.fillRect(cx - e.hw, cy - e.hh, e.hw * 2, e.hh * 2);
 }
 
+// 한 걸음마다 무작위로 등장하는 일반 추격자 이미지들 (CC-BY-SA 3.0 Clint Bellanger).
+// 출처와 라이선스는 public/dungeon/CREDITS.md 참고.
+const REGULAR_ENEMY_SRCS = [
+  "/dungeon/enemies/druid.png",
+  "/dungeon/enemies/skeleton.png",
+  "/dungeon/enemies/zombie.png",
+  "/dungeon/enemies/death_speaker.png",
+  "/dungeon/enemies/imp.png",
+];
+// 탈출 직전, 마지막 걸음에만 고정으로 등장하는 보스.
+const DRAGON_SRC = "/dungeon/enemies/dragon.png";
+const DRAGON_INDEX = REGULAR_ENEMY_SRCS.length;
+const ENEMY_SRCS = [...REGULAR_ENEMY_SRCS, DRAGON_SRC];
+
+/** 걸음마다 등장할 몬스터 순서를 만든다. 마지막 걸음은 항상 드래곤. */
+function buildEnemySequence(steps: number): number[] {
+  const seq: number[] = [];
+  for (let i = 0; i < steps; i++) {
+    seq.push(
+      i === steps - 1
+        ? DRAGON_INDEX
+        : Math.floor(Math.random() * REGULAR_ENEMY_SRCS.length)
+    );
+  }
+  return seq;
+}
+
+function enemyIndexAt(seq: number[], stepIndex: number) {
+  if (seq.length === 0) return 0;
+  return seq[Math.min(Math.max(stepIndex, 0), seq.length - 1)];
+}
+
+// 위 에셋이 로드되기 전이나 실패했을 때만 쓰는 대체용 도트 그래픽.
 const MONSTER_ROWS = [
   "....000000....",
   "...0112211 0..",
@@ -134,7 +172,7 @@ const MONSTER_PALETTE: Record<string, string> = {
   "6": "#3d3a44",
 };
 
-function drawMonster(ctx: CanvasRenderingContext2D, scale: number) {
+function drawMonsterFallback(ctx: CanvasRenderingContext2D, scale: number) {
   const ox = 80 - (7.5 * scale);
   const oy = 34;
   for (let y = 0; y < MONSTER_ROWS.length; y++) {
@@ -150,52 +188,100 @@ function drawMonster(ctx: CanvasRenderingContext2D, scale: number) {
   ctx.fillRect(ox + 8 * scale, oy + 3 * scale, scale, scale);
 }
 
+function drawEnemyImage(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  alpha: number,
+  scale: number
+) {
+  if (alpha <= 0) return;
+  ctx.globalAlpha = alpha;
+  const dw = CANVAS_W * scale;
+  const dh = CANVAS_H * scale;
+  ctx.drawImage(img, (CANVAS_W - dw) / 2, (CANVAS_H - dh) / 2, dw, dh);
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * swapT === 0: 정지 상태, prevImg(=현재 몬스터)만 그린다. attacking이면 살짝 확대.
+ * 0 < swapT < 1: prevImg가 확대되며 사라지고, 뒤이어 nextImg가 멀리서 다가오며 나타난다.
+ */
+function drawMonster(
+  ctx: CanvasRenderingContext2D,
+  prevImg: HTMLImageElement | null,
+  nextImg: HTMLImageElement | null,
+  swapT: number,
+  attacking: boolean
+) {
+  if (swapT <= 0) {
+    if (!prevImg) {
+      drawMonsterFallback(ctx, attacking ? 2.9 : 2.7);
+      return;
+    }
+    drawEnemyImage(ctx, prevImg, 1, attacking ? 1.08 : 1);
+    return;
+  }
+
+  if (swapT < 0.5) {
+    const t = swapT / 0.5;
+    if (prevImg) drawEnemyImage(ctx, prevImg, 1 - t, 1 + t * 0.5);
+    else if (t < 0.5) drawMonsterFallback(ctx, 2.7 + t);
+    return;
+  }
+
+  const t = (swapT - 0.5) / 0.5;
+  if (nextImg) drawEnemyImage(ctx, nextImg, t, 0.6 + t * 0.4);
+  else if (t > 0.5) drawMonsterFallback(ctx, 2.7);
+}
+
+// 지나온 거리와 남은 거리를 사각 격자가 아닌 일자 진행 바로 보여준다.
 function drawMinimap(
   ctx: CanvasRenderingContext2D,
   path: PathStep[],
   stepIndex: number
 ) {
-  const w = 48;
-  const h = 36;
+  const w = 62;
+  const h = 10;
   const x = CANVAS_W - w - 3;
   const y = 3;
 
-  ctx.globalAlpha = 0.6;
+  ctx.globalAlpha = 0.7;
   ctx.fillStyle = "#0a0a0c";
   ctx.fillRect(x, y, w, h);
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.9;
   ctx.strokeStyle = "#6f665c";
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
-  if (path.length === 0) {
+  const total = path.length;
+  if (total === 0) {
     ctx.globalAlpha = 1;
     return;
   }
 
-  const maxX = Math.max(...path.map((p) => p.x));
-  const maxY = Math.max(...path.map((p) => p.y));
-  const cell = Math.max(
-    2,
-    Math.min((w - 4) / (maxX + 1), (h - 4) / (maxY + 1))
+  const innerX = x + 1.5;
+  const innerY = y + 1.5;
+  const innerW = w - 3;
+  const innerH = h - 3;
+  const progress = Math.min(stepIndex, total) / total;
+
+  ctx.fillStyle = "#3a3733";
+  ctx.fillRect(innerX, innerY, innerW, innerH);
+  ctx.fillStyle = "#c9a227";
+  ctx.fillRect(innerX, innerY, innerW * progress, innerH);
+
+  const markerX = Math.min(
+    innerX + innerW * progress,
+    innerX + innerW - 1.5
   );
-  const px = x + 2;
-  const py = y + 2;
-
-  path.forEach((step, i) => {
-    ctx.fillStyle = i < stepIndex ? "#c9a227" : "#3a3733";
-    ctx.fillRect(px + step.x * cell, py + step.y * cell, cell - 0.5, cell - 0.5);
-  });
-
-  const current = path[Math.min(stepIndex, path.length - 1)];
   ctx.fillStyle = "#e8e2d8";
-  ctx.fillRect(
-    px + current.x * cell,
-    py + current.y * cell,
-    cell - 0.5,
-    cell - 0.5
-  );
+  ctx.fillRect(markerX, innerY - 1, 1.5, innerH + 2);
+
   ctx.globalAlpha = 1;
+  ctx.fillStyle = "#e8e2d8cc";
+  ctx.font = "7px monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`${Math.min(stepIndex, total)}/${total}`, x + w, y + h + 8);
 }
 
 function drawEnergy(ctx: CanvasRenderingContext2D, energy: number, max: number) {
@@ -221,6 +307,8 @@ function drawTurnHint(ctx: CanvasRenderingContext2D) {
   ctx.fillText("↷ 방향 전환", 4, CANVAS_H - 4);
 }
 
+const STEP_ANIMATION_MS = 380;
+
 export function DungeonView({
   path,
   stepIndex,
@@ -230,6 +318,25 @@ export function DungeonView({
   className,
 }: DungeonViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const prevStepRef = useRef(stepIndex);
+  const rafRef = useRef<number | null>(null);
+  const enemyImgsRef = useRef<(HTMLImageElement | null)[]>(
+    ENEMY_SRCS.map(() => null)
+  );
+  const [enemyLoadTick, setEnemyLoadTick] = useState(0);
+  // path가 바뀔 때(새 퍼즐)만 다시 섞고, 같은 판 안에서는 순서를 유지한다.
+  const enemySequence = useMemo(() => buildEnemySequence(path.length), [path]);
+
+  useEffect(() => {
+    ENEMY_SRCS.forEach((src, i) => {
+      const img = new window.Image();
+      img.src = src;
+      img.onload = () => {
+        enemyImgsRef.current[i] = img;
+        setEnemyLoadTick((t) => t + 1);
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -237,20 +344,59 @@ export function DungeonView({
     if (!ctx) return;
 
     ctx.imageSmoothingEnabled = false;
-    drawCorridor(ctx, stepIndex);
-    drawMonster(ctx, attacking ? 2.9 : 2.7);
-    drawEnergy(ctx, energy, maxEnergy);
 
-    const upcoming = path[stepIndex];
-    if (upcoming?.turn) drawTurnHint(ctx);
+    const prevStep = prevStepRef.current;
+    const stepped = stepIndex > prevStep;
+    prevStepRef.current = stepIndex;
 
-    if (attacking) {
-      ctx.fillStyle = "rgba(180, 30, 20, 0.35)";
-      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    const prevEnemyImg =
+      enemyImgsRef.current[enemyIndexAt(enemySequence, prevStep)];
+    const nextEnemyImg =
+      enemyImgsRef.current[enemyIndexAt(enemySequence, stepIndex)];
+
+    function render(depthT: number, swapT: number) {
+      if (!ctx) return;
+      drawCorridor(ctx, stepIndex, depthT);
+      drawMonster(ctx, prevEnemyImg, nextEnemyImg, swapT, attacking);
+      drawEnergy(ctx, energy, maxEnergy);
+
+      const upcoming = path[stepIndex];
+      if (upcoming?.turn) drawTurnHint(ctx);
+
+      if (attacking) {
+        ctx.fillStyle = "rgba(180, 30, 20, 0.35)";
+        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+      }
+
+      drawMinimap(ctx, path, stepIndex);
     }
 
-    drawMinimap(ctx, path, stepIndex);
-  }, [path, stepIndex, energy, maxEnergy, attacking]);
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+
+    if (!stepped) {
+      render(0, 0);
+      return;
+    }
+
+    // 전진 시 카메라가 한 칸 앞으로 훅 다가가는 동안, 몬스터도 물러나 사라졌다가
+    // 다음 몬스터가 다른 모습으로 다가오며 나타난다.
+    const start = performance.now();
+    function tick(now: number) {
+      const raw = Math.min(1, (now - start) / STEP_ANIMATION_MS);
+      const easedDepth = 1 - (1 - raw) ** 3;
+      render(easedDepth, raw);
+      if (raw < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        rafRef.current = null;
+      }
+    }
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [path, stepIndex, energy, maxEnergy, attacking, enemyLoadTick, enemySequence]);
 
   return (
     <canvas
