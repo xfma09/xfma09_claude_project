@@ -12,7 +12,7 @@ export const MAX_ENERGY = 7;
 export const TURN_DURATION_MS: Record<Difficulty, number> = {
   easy: 30_000,
   medium: 45_000,
-  hard: 60_000,
+  hard: 90_000,
 };
 
 // "escaping"은 탈출이 확정된 뒤, 마지막 칸 자동완성과 용 퇴장 연출이
