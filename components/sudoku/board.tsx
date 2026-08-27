@@ -9,6 +9,9 @@ interface SudokuBoardProps {
   given: boolean[][];
   selectedCell: { row: number; col: number } | null;
   onSelectCell: (row: number, col: number) => void;
+  // 마지막 빈칸이 자동으로 채워질 때, 어떤 순서로 채워졌는지 알려준다.
+  // 이 순서대로 하나씩 나타나는 애니메이션을 준다.
+  autoFilledCells?: { row: number; col: number }[];
 }
 
 export function SudokuBoard({
@@ -16,6 +19,7 @@ export function SudokuBoard({
   given,
   selectedCell,
   onSelectCell,
+  autoFilledCells = [],
 }: SudokuBoardProps) {
   return (
     <div className="w-full max-w-md">
@@ -41,6 +45,10 @@ export function SudokuBoard({
                   selectedCell?.row === rowIndex &&
                   selectedCell?.col === colIndex;
                 const isBlank = value === null;
+                const autoFillIndex = autoFilledCells.findIndex(
+                  (c) => c.row === rowIndex && c.col === colIndex
+                );
+                const isAutoFilled = autoFillIndex !== -1;
 
                 return (
                   <button
@@ -79,7 +87,18 @@ export function SudokuBoard({
                     )}
                   >
                     {value !== null && (
-                      <div className="h-[60%] w-[60%]">
+                      <div
+                        className={cn(
+                          "h-[60%] w-[60%]",
+                          isAutoFilled &&
+                            "opacity-0 [animation:cell-auto-fill_0.42s_ease-out_forwards]"
+                        )}
+                        style={
+                          isAutoFilled
+                            ? { animationDelay: `${autoFillIndex * 55}ms` }
+                            : undefined
+                        }
+                      >
                         <Digit value={value} tone={isGiven ? "given" : "input"} />
                       </div>
                     )}

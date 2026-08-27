@@ -8,7 +8,15 @@ import {
 
 export const MAX_ENERGY = 7;
 
-export type Phase = "start" | "loading" | "playing" | "escaped" | "dead";
+// "escaping"은 탈출이 확정된 뒤, 마지막 칸 자동완성과 용 퇴장 연출이
+// 재생되는 동안 머무는 중간 상태다. 연출이 끝나야 "escaped"로 넘어간다.
+export type Phase =
+  | "start"
+  | "loading"
+  | "playing"
+  | "escaping"
+  | "escaped"
+  | "dead";
 
 export interface CellPosition {
   row: number;
@@ -26,6 +34,8 @@ export interface GameState {
   energy: number;
   selectedCell: CellPosition | null;
   attacking: boolean;
+  // 마지막 빈칸이 남아 스도쿠 규칙상 자동으로 채워진 칸들. 애니메이션 트리거용.
+  autoFilledCells: CellPosition[];
   startedAt: number | null;
   endedAt: number | null;
   errorMessage: string | null;
@@ -38,6 +48,7 @@ export type GameAction =
   | { type: "SELECT_CELL"; row: number; col: number }
   | { type: "SUBMIT_VALUE"; value: number; now: number }
   | { type: "CLEAR_ATTACK" }
+  | { type: "FINISH_ESCAPE" }
   | { type: "RESTART" };
 
 export function createInitialState(): GameState {
@@ -52,6 +63,7 @@ export function createInitialState(): GameState {
     energy: MAX_ENERGY,
     selectedCell: null,
     attacking: false,
+    autoFilledCells: [],
     startedAt: null,
     endedAt: null,
     errorMessage: null,
@@ -84,6 +96,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         energy: MAX_ENERGY,
         selectedCell: null,
         attacking: false,
+        autoFilledCells: [],
         startedAt: action.now,
         endedAt: null,
         errorMessage: null,
@@ -116,6 +129,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const board = state.board.map((r) => [...r]);
         board[row][col] = action.value;
         let stepIndex = state.stepIndex + 1;
+        const autoFilledCells: CellPosition[] = [];
 
         // 빈칸이 정확히 하나 남으면 그 값은 스도쿠 규칙상 이미 하나로
         // 결정돼 있으므로, 입력을 더 받지 않고 자동으로 채워 마무리한다.
@@ -124,6 +138,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             for (let c = 0; c < board[r].length; c++) {
               if (board[r][c] === null) {
                 board[r][c] = state.solution[r][c];
+                autoFilledCells.push({ row: r, col: c });
               }
             }
           }
@@ -137,7 +152,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           stepIndex,
           selectedCell: null,
           attacking: false,
-          phase: escaped ? "escaped" : "playing",
+          autoFilledCells,
+          // 탈출이 확정돼도 곧바로 "escaped"로 넘기지 않는다. 자동완성과 용
+          // 퇴장 연출이 재생될 시간을 준 뒤 FINISH_ESCAPE로 마무리한다.
+          phase: escaped ? "escaping" : "playing",
           endedAt: escaped ? action.now : state.endedAt,
         };
       }
@@ -155,6 +173,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case "CLEAR_ATTACK":
       return { ...state, attacking: false };
+
+    case "FINISH_ESCAPE":
+      if (state.phase !== "escaping") return state;
+      return { ...state, phase: "escaped" };
 
     case "RESTART":
       return createInitialState();

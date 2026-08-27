@@ -167,9 +167,23 @@ describe("SELECT_CELL / SUBMIT_VALUE", () => {
     expect(state.board[lastCell.row][lastCell.col]).toBe(
       Number(SOLUTION[lastCell.row * 9 + lastCell.col])
     );
-    expect(state.phase).toBe("escaped");
+    // 탈출 확정 직후에는 연출을 위해 "escaping"에 머무르고,
+    // FINISH_ESCAPE가 와야 비로소 "escaped"로 넘어간다.
+    expect(state.phase).toBe("escaping");
     expect(state.stepIndex).toBe(blankCells.length);
     expect(state.endedAt).toBe(3000 + toFillManually.length - 1);
+    expect(state.autoFilledCells).toEqual([lastCell]);
+
+    state = gameReducer(state, { type: "FINISH_ESCAPE" });
+    expect(state.phase).toBe("escaped");
+  });
+});
+
+describe("FINISH_ESCAPE", () => {
+  test("escaping 상태가 아니면 아무 효과가 없다", () => {
+    const state = loaded();
+    const next = gameReducer(state, { type: "FINISH_ESCAPE" });
+    expect(next).toBe(state);
   });
 });
 

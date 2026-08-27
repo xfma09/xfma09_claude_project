@@ -207,13 +207,15 @@ function drawEnemyImage(
   img: HTMLImageElement,
   alpha: number,
   scale: number,
-  flash: number = 0
+  flash: number = 0,
+  // 캔버스 높이 대비 아래로 밀어낼 비율. 용이 가라앉으며 퇴장할 때 쓴다.
+  sinkRatio: number = 0
 ) {
   if (alpha <= 0) return;
   const dw = CANVAS_W * scale;
   const dh = CANVAS_H * scale;
   const dx = (CANVAS_W - dw) / 2;
-  const dy = (CANVAS_H - dh) / 2;
+  const dy = (CANVAS_H - dh) / 2 + CANVAS_H * sinkRatio;
 
   if (flash > 0) {
     const off = getFlashCanvas();
@@ -243,13 +245,16 @@ function drawEnemyImage(
  * swapT === 0: 정지 상태, prevImg(=현재 몬스터)만 그린다. attacking이면 살짝 확대.
  * 0 < swapT < 1: 정답을 맞혀 몬스터가 피격 점멸하며 사라지고, 뒤이어 nextImg가
  * 멀리서 다가오며 나타난다.
+ * isFinalDeparture이면(용을 쓰러뜨려 탈출을 확정지은 순간) 다음 몬스터 없이,
+ * 용 혼자 천천히 점멸하며 화면 아래로 가라앉듯 퇴장한다.
  */
 function drawMonster(
   ctx: CanvasRenderingContext2D,
   prevImg: HTMLImageElement | null,
   nextImg: HTMLImageElement | null,
   swapT: number,
-  attacking: boolean
+  attacking: boolean,
+  isFinalDeparture: boolean = false
 ) {
   if (swapT <= 0) {
     if (!prevImg) {
@@ -257,6 +262,17 @@ function drawMonster(
       return;
     }
     drawEnemyImage(ctx, prevImg, 1, attacking ? 1.08 : 1);
+    return;
+  }
+
+  if (isFinalDeparture) {
+    if (!prevImg) return;
+    // 점멸 주기를 천천히(약 3회) 반복하면서, 서서히 투명해지고 가라앉는다.
+    const blink = (Math.sin(swapT * Math.PI * 6) + 1) / 2;
+    const flash = swapT < 0.85 ? blink * (1 - swapT) : 0;
+    const alpha = Math.max(0, 1 - swapT ** 1.5);
+    const sinkRatio = swapT ** 2 * 0.9;
+    drawEnemyImage(ctx, prevImg, alpha, 1, flash, sinkRatio);
     return;
   }
 
@@ -350,6 +366,9 @@ function drawEnergy(ctx: CanvasRenderingContext2D, energy: number, max: number) 
 }
 
 const STEP_ANIMATION_MS = 380;
+// 용 퇴장 연출 재생 시간. app/page.tsx의 ESCAPE_TRANSITION_MS가 이보다
+// 길어야 화면이 끊기지 않고 다 재생된다.
+const DRAGON_EXIT_MS = 1400;
 
 export function DungeonView({
   path,
@@ -389,17 +408,35 @@ export function DungeonView({
 
     const prevStep = prevStepRef.current;
     const stepped = stepIndex > prevStep;
+
+    // 이미지 지연 로딩(enemyLoadTick)만으로 이펙트가 재실행된 경우, 아직
+    // 재생 중인 스텝/퇴장 애니메이션을 건드리지 않는다. 그렇지 않으면
+    // 진행 중이던 연출이 정지 프레임으로 리셋돼 중간에 끊겨 보인다.
+    if (!stepped && rafRef.current !== null) return;
+
     prevStepRef.current = stepIndex;
+
+    // 마지막 걸음을 넘어섰다면 탈출이 확정된 순간이다. 다음 몬스터로
+    // 넘어가는 대신, 방금 쓰러뜨린 용이 혼자 퇴장하는 연출을 보여준다.
+    const isFinalDeparture = stepIndex >= path.length && path.length > 0;
 
     const prevEnemyImg =
       enemyImgsRef.current[enemyIndexAt(enemySequence, prevStep)];
-    const nextEnemyImg =
-      enemyImgsRef.current[enemyIndexAt(enemySequence, stepIndex)];
+    const nextEnemyImg = isFinalDeparture
+      ? null
+      : enemyImgsRef.current[enemyIndexAt(enemySequence, stepIndex)];
 
     function render(depthT: number, swapT: number) {
       if (!ctx) return;
       drawCorridor(ctx, stepIndex, depthT);
-      drawMonster(ctx, prevEnemyImg, nextEnemyImg, swapT, attacking);
+      drawMonster(
+        ctx,
+        prevEnemyImg,
+        nextEnemyImg,
+        swapT,
+        attacking,
+        isFinalDeparture
+      );
       drawEnergy(ctx, energy, maxEnergy);
 
       if (attacking) {
@@ -418,10 +455,11 @@ export function DungeonView({
     }
 
     // 전진 시 카메라가 한 칸 앞으로 훅 다가가는 동안, 몬스터도 물러나 사라졌다가
-    // 다음 몬스터가 다른 모습으로 다가오며 나타난다.
+    // 다음 몬스터가 다른 모습으로 다가오며 나타난다. 용 퇴장은 훨씬 천천히 보여준다.
+    const duration = isFinalDeparture ? DRAGON_EXIT_MS : STEP_ANIMATION_MS;
     const start = performance.now();
     function tick(now: number) {
-      const raw = Math.min(1, (now - start) / STEP_ANIMATION_MS);
+      const raw = Math.min(1, (now - start) / duration);
       const easedDepth = 1 - (1 - raw) ** 3;
       render(easedDepth, raw);
       if (raw < 1) {

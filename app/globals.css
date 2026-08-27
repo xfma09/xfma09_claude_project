@@ -136,3 +136,10 @@
   60% { transform: translateX(-2px); }
   80% { transform: translateX(2px); }
 }
+
+/* 마지막 빈칸이 자동으로 채워질 때, 칸마다 순서대로 튀어나오듯 나타난다. */
+@keyframes cell-auto-fill {
+  0% { opacity: 0; transform: scale(0.3); }
+  60% { opacity: 1; transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}

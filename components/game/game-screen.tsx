@@ -42,6 +42,7 @@ export function GameScreen({
           given={state.given}
           selectedCell={state.selectedCell}
           onSelectCell={onSelectCell}
+          autoFilledCells={state.autoFilledCells}
         />
         <NumberPad disabled={!state.selectedCell} onSubmit={onSubmitValue} />
       </div>
