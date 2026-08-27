@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Digit } from "@/components/sudoku/digit";
 
 interface NumberPadProps {
   disabled: boolean;
@@ -23,8 +24,12 @@ export function NumberPad({ disabled, onSubmit }: NumberPadProps) {
           size="icon"
           disabled={disabled}
           onClick={() => onSubmit(n)}
+          aria-label={`${n} 입력`}
+          className="border border-[#3a3020] bg-[#141210] hover:bg-[#221c14] disabled:opacity-40"
         >
-          {n}
+          <div className="h-[65%] w-[65%]">
+            <Digit value={n} tone="input" />
+          </div>
         </Button>
       ))}
     </div>
